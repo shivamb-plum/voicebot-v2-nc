@@ -1,0 +1,96 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>DeepFilterNet3 Live</title>
+<style>
+  body{font:15px system-ui;background:#111;color:#eee;max-width:640px;margin:40px auto;padding:0 16px}
+  h1{font-size:20px;font-weight:600}
+  button{font:inherit;padding:10px 22px;border:0;border-radius:8px;background:#e33;color:#fff;cursor:pointer}
+  button.on{background:#444}
+  button:disabled{opacity:.5;cursor:default}
+  #meter{height:6px;background:#222;border-radius:3px;margin:16px 0;overflow:hidden}
+  #meter div{height:100%;width:0;background:#4c8;transition:width .05s}
+  .stats{display:flex;gap:24px;color:#aaa;margin-bottom:24px}
+  .stats b{color:#eee;display:block;font-size:18px}
+  section{margin-top:20px}
+  audio{width:100%;margin-top:6px}
+  a{color:#4c8}
+</style>
+<h1>DeepFilterNet3 – live denoise</h1>
+<button id="rec" disabled>Connecting…</button>
+<span id="status" style="margin-left:12px;color:#aaa"></span>
+<div id="meter"><div></div></div>
+<div class="stats">
+  <div>Recorded<b id="dur">0.0 s</b></div>
+  <div>Chunks<b id="chunks">0</b></div>
+  <div>Model latency<b id="ms">– ms</b></div>
+</div>
+<section>Noisy (raw mic)<audio id="noisy" controls></audio></section>
+<section>Filtered (DeepFilterNet3)<audio id="clean" controls></audio> <a id="dl" hidden download="filtered.wav">download</a></section>
+
+<script>
+const $ = id => document.getElementById(id);
+let ws, actx, stream, node, noisy = [], clean = [], samples = 0, chunks = 0, recording = false;
+
+function connect() {
+  ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`);
+  ws.binaryType = "arraybuffer";
+  ws.onopen = () => { $("rec").disabled = false; $("rec").textContent = "Record"; };
+  ws.onclose = () => { $("rec").disabled = true; $("status").textContent = "disconnected, retrying…"; setTimeout(connect, 1000); };
+  ws.onmessage = e => {
+    if (e.data instanceof ArrayBuffer) { clean.push(new Float32Array(e.data)); $("chunks").textContent = ++chunks; return; }
+    const m = JSON.parse(e.data);
+    if (m.ms !== undefined) $("ms").textContent = m.ms + " ms";
+    if (m.done) finish();
+  };
+}
+connect();
+
+async function start() {
+  noisy = []; clean = []; samples = 0; chunks = 0; $("chunks").textContent = 0; $("dl").hidden = true;
+  actx = new AudioContext({ sampleRate: 48000 });
+  ws.send(JSON.stringify({ sr: actx.sampleRate }));
+  // turn off browser DSP so the model gets the real noise
+  stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+  const src = actx.createMediaStreamSource(stream);
+  node = actx.createScriptProcessor(4096, 1, 1);  // ponytail: deprecated but zero extra files; AudioWorklet if it glitches
+  node.onaudioprocess = e => {
+    const x = new Float32Array(e.inputBuffer.getChannelData(0));
+    noisy.push(x); samples += x.length; ws.send(x.buffer);
+    $("dur").textContent = (samples / actx.sampleRate).toFixed(1) + " s";
+    let s = 0; for (const v of x) s += v * v;
+    $("meter").firstElementChild.style.width = Math.min(100, Math.sqrt(s / x.length) * 400) + "%";
+  };
+  const mute = actx.createGain(); mute.gain.value = 0;
+  src.connect(node).connect(mute).connect(actx.destination);
+  recording = true; $("rec").textContent = "Stop"; $("rec").classList.add("on"); $("status").textContent = "recording…";
+}
+
+function stop() {
+  recording = false; node.disconnect(); stream.getTracks().forEach(t => t.stop()); actx.close();
+  ws.send(JSON.stringify({ stop: true }));
+  $("rec").disabled = true; $("status").textContent = "finishing…";
+  $("meter").firstElementChild.style.width = 0;
+}
+
+function finish() {
+  $("noisy").src = wavUrl(noisy, actx.sampleRate);
+  const url = wavUrl(clean, 48000);
+  $("clean").src = url; $("dl").href = url; $("dl").hidden = false;
+  $("rec").disabled = false; $("rec").textContent = "Record"; $("rec").classList.remove("on"); $("status").textContent = "done";
+}
+
+$("rec").onclick = () => recording ? stop() : start().catch(e => { $("status").textContent = e.message; });
+
+function wavUrl(chunks, sr) {
+  const n = chunks.reduce((a, c) => a + c.length, 0);
+  const b = new DataView(new ArrayBuffer(44 + n * 2));
+  const str = (o, s) => [...s].forEach((c, i) => b.setUint8(o + i, c.charCodeAt(0)));
+  str(0, "RIFF"); b.setUint32(4, 36 + n * 2, true); str(8, "WAVEfmt ");
+  b.setUint32(16, 16, true); b.setUint16(20, 1, true); b.setUint16(22, 1, true);
+  b.setUint32(24, sr, true); b.setUint32(28, sr * 2, true); b.setUint16(32, 2, true); b.setUint16(34, 16, true);
+  str(36, "data"); b.setUint32(40, n * 2, true);
+  let o = 44;
+  for (const c of chunks) for (const v of c) { b.setInt16(o, Math.max(-1, Math.min(1, v)) * 32767, true); o += 2; }
+  return URL.createObjectURL(new Blob([b], { type: "audio/wav" }));
+}
+</script>

@@ -1,0 +1,27 @@
+[project]
+name = "dfn-dashboard"
+version = "0.1.0"
+requires-python = ">=3.11,<3.12"
+dependencies = [
+    "deepfilternet>=0.5.6",
+    "fastapi>=0.141.1",
+    "numpy>=1.26.4",
+    "torch<2.9",
+    "torchaudio<2.9",
+    "uvicorn[standard]>=0.53.0",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+]
+
+# CPU-only torch on Linux (the Vercel container); macOS keeps the default PyPI wheels.
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+torchaudio = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
