@@ -36,7 +36,7 @@ async def ws(ws: WebSocket):
         out = await asyncio.to_thread(denoise, ctx, chunk)
         ctx = chunk[-CONTEXT:]
         await ws.send_bytes(out.astype(np.float32).tobytes())
-        await ws.send_text(json.dumps({"ms": round((time.perf_counter() - t) * 1000)}))
+        await ws.send_text(json.dumps({"ms": round((time.perf_counter() - t) * 1000), "sec": len(chunk) / SR}))
 
     while True:
         msg = await ws.receive()

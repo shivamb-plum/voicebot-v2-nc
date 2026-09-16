@@ -1,53 +1,127 @@
 <!doctype html>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>DeepFilterNet3 Live</title>
 <style>
-  body{font:15px system-ui;background:#111;color:#eee;max-width:640px;margin:40px auto;padding:0 16px}
-  h1{font-size:20px;font-weight:600}
+  :root{--bg:#0f1115;--card:#171a21;--ink:#eee;--muted:#8b93a7;--accent:#5ad8a4;--warn:#f5b342;--line:#2a2f3a}
+  body{font:15px system-ui;background:var(--bg);color:var(--ink);max-width:760px;margin:32px auto;padding:0 16px}
+  h1{font-size:20px;font-weight:600;margin:0 0 16px}
   button{font:inherit;padding:10px 22px;border:0;border-radius:8px;background:#e33;color:#fff;cursor:pointer}
   button.on{background:#444}
   button:disabled{opacity:.5;cursor:default}
-  #meter{height:6px;background:#222;border-radius:3px;margin:16px 0;overflow:hidden}
-  #meter div{height:100%;width:0;background:#4c8;transition:width .05s}
-  .stats{display:flex;gap:24px;color:#aaa;margin-bottom:24px}
-  .stats b{color:#eee;display:block;font-size:18px}
-  section{margin-top:20px}
-  audio{width:100%;margin-top:6px}
-  a{color:#4c8}
+  label{color:var(--muted);margin-left:16px;cursor:pointer}
+  .hero{background:var(--card);border-radius:12px;padding:20px 24px;margin:20px 0}
+  .hero .big{font-size:56px;font-weight:700;line-height:1;color:var(--accent);font-variant-numeric:tabular-nums}
+  .hero .big small{font-size:22px;color:var(--ink);font-weight:500;margin-left:8px}
+  .hero .sub{color:var(--muted);margin-top:8px}
+  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:16px 0}
+  .tile{background:var(--card);border-radius:10px;padding:12px 14px;color:var(--muted);font-size:13px}
+  .tile b{display:block;color:var(--ink);font-size:22px;font-weight:600;margin-top:2px;font-variant-numeric:tabular-nums}
+  .prog{margin:16px 0 6px;color:var(--muted);font-size:13px;display:flex;justify-content:space-between}
+  .bar{height:8px;background:var(--line);border-radius:4px;overflow:hidden;position:relative}
+  .bar i{position:absolute;left:0;top:0;bottom:0;border-radius:4px;transition:width .1s}
+  .bar .cap{background:#3a4152}
+  .bar .fil{background:var(--accent)}
+  #meter{height:4px;background:var(--line);border-radius:2px;margin:14px 0 0;overflow:hidden}
+  #meter div{height:100%;width:0;background:var(--muted);transition:width .05s}
+  .strip{margin-top:20px}
+  .strip .hdr{display:flex;justify-content:space-between;color:var(--muted);font-size:13px;margin-bottom:6px}
+  #chart{height:90px;display:flex;align-items:flex-end;gap:2px;border-bottom:1px solid var(--line);position:relative;overflow:hidden}
+  #chart span{flex:0 0 5px;background:var(--accent);border-radius:2px 2px 0 0;min-height:2px}
+  #chart span.slow{background:var(--warn)}
+  #budget{position:absolute;left:0;right:0;border-top:1px dashed var(--muted);color:var(--muted);font-size:11px;text-align:right;padding-right:4px}
+  section{margin-top:20px;color:var(--muted)}
+  audio{width:100%;margin-top:6px;display:block}
+  a{color:var(--accent)}
 </style>
-<h1>DeepFilterNet3 – live denoise</h1>
+<h1>DeepFilterNet3 – live noise cancellation</h1>
 <button id="rec" disabled>Connecting…</button>
-<span id="status" style="margin-left:12px;color:#aaa"></span>
-<div id="meter"><div></div></div>
-<div class="stats">
-  <div>Recorded<b id="dur">0.0 s</b></div>
-  <div>Chunks<b id="chunks">0</b></div>
-  <div>Model latency<b id="ms">– ms</b></div>
+<label><input type="checkbox" id="mon"> monitor filtered audio live (headphones)</label>
+<span id="status" style="margin-left:12px;color:var(--muted)"></span>
+
+<div class="hero">
+  <div class="big"><span id="speed">–</span><small>× faster than realtime</small></div>
+  <div class="sub" id="speedsub">Audio seconds denoised per second of model compute. Above 1× means it keeps up live.</div>
 </div>
+
+<div class="tiles">
+  <div class="tile">Avg model time / 0.5 s chunk<b id="avg">– ms</b></div>
+  <div class="tile">Last chunk<b id="ms">– ms</b></div>
+  <div class="tile">Lag behind live<b id="lag">– s</b></div>
+  <div class="tile">Chunks denoised<b id="chunks">0</b></div>
+</div>
+
+<div class="prog"><span>Captured <b id="dur">0.0 s</b></span><span>Filtered <b id="fdur">0.0 s</b></span></div>
+<div class="bar"><i class="cap" style="width:100%"></i><i class="fil" id="fil"></i></div>
+<div id="meter"><div></div></div>
+
+<div class="strip">
+  <div class="hdr"><span>Model time per chunk, as it happens</span><span id="scale"></span></div>
+  <div id="chart"><div id="budget" hidden></div></div>
+</div>
+
 <section>Noisy (raw mic)<audio id="noisy" controls></audio></section>
-<section>Filtered (DeepFilterNet3)<audio id="clean" controls></audio> <a id="dl" hidden download="filtered.wav">download</a></section>
+<section>Filtered (DeepFilterNet3)<audio id="clean" controls></audio> <a id="dl" hidden download="filtered.wav">download filtered.wav</a></section>
 
 <script>
 const $ = id => document.getElementById(id);
-let ws, actx, stream, node, noisy = [], clean = [], samples = 0, chunks = 0, recording = false;
+const BUDGET = 500;  // ms of wall-clock available per 0.5 s chunk before we fall behind live
+let ws, actx, pctx, stream, node, noisy = [], clean = [], samples = 0, fsamples = 0, chunks = 0, recording = false;
+let audioSec = 0, modelMs = 0, nextPlay = 0, maxMs = 50;
 
 function connect() {
   ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`);
   ws.binaryType = "arraybuffer";
-  ws.onopen = () => { $("rec").disabled = false; $("rec").textContent = "Record"; };
+  ws.onopen = () => { $("rec").disabled = false; $("rec").textContent = "Record"; $("status").textContent = ""; };
   ws.onclose = () => { $("rec").disabled = true; $("status").textContent = "disconnected, retrying…"; setTimeout(connect, 1000); };
   ws.onmessage = e => {
-    if (e.data instanceof ArrayBuffer) { clean.push(new Float32Array(e.data)); $("chunks").textContent = ++chunks; return; }
+    if (e.data instanceof ArrayBuffer) { onClean(new Float32Array(e.data)); return; }
     const m = JSON.parse(e.data);
-    if (m.ms !== undefined) $("ms").textContent = m.ms + " ms";
+    if (m.ms !== undefined) onStat(m);
     if (m.done) finish();
   };
 }
 connect();
 
+function onClean(x) {
+  clean.push(x); fsamples += x.length; $("chunks").textContent = ++chunks;
+  $("fdur").textContent = (fsamples / 48000).toFixed(1) + " s";
+  $("fil").style.width = samples ? Math.min(100, 100 * fsamples / (samples * 48000 / actx.sampleRate)) + "%" : 0;
+  $("lag").textContent = Math.max(0, samples / actx.sampleRate - fsamples / 48000).toFixed(2) + " s";
+  if ($("mon").checked && pctx) {  // live monitor: schedule each clean chunk back-to-back
+    const b = pctx.createBuffer(1, x.length, 48000); b.copyToChannel(x, 0);
+    const s = pctx.createBufferSource(); s.buffer = b; s.connect(pctx.destination);
+    nextPlay = Math.max(nextPlay, pctx.currentTime + 0.05); s.start(nextPlay); nextPlay += b.duration;
+  }
+}
+
+function onStat(m) {
+  audioSec += m.sec; modelMs += m.ms;
+  $("ms").textContent = m.ms + " ms";
+  $("avg").textContent = Math.round(modelMs / chunks) + " ms";
+  $("speed").textContent = (audioSec * 1000 / modelMs).toFixed(0);
+  $("speedsub").textContent = `${audioSec.toFixed(1)} s of audio denoised in ${(modelMs / 1000).toFixed(2)} s of model time`;
+  // latency strip: one thin bar per chunk, y auto-scales, dashed line marks the realtime budget when in range
+  maxMs = Math.max(maxMs, m.ms * 1.25);
+  const bar = document.createElement("span");
+  bar.style.height = Math.min(100, 100 * m.ms / maxMs) + "%";
+  bar.title = `chunk ${chunks}: ${m.ms} ms for ${(m.sec * 1000).toFixed(0)} ms of audio`;
+  if (m.ms > BUDGET) bar.classList.add("slow");
+  $("chart").appendChild(bar);
+  for (const s of $("chart").querySelectorAll("span")) s.style.height = Math.min(100, 100 * parseFloat(s.title.split(": ")[1]) / maxMs) + "%";
+  $("scale").textContent = `y: 0–${Math.round(maxMs)} ms · realtime budget ${BUDGET} ms`;
+  $("budget").hidden = BUDGET > maxMs;
+  $("budget").style.bottom = 100 * BUDGET / maxMs + "%"; $("budget").textContent = `${BUDGET} ms budget`;
+  while ($("chart").querySelectorAll("span").length > 140) $("chart").querySelector("span").remove();
+}
+
 async function start() {
-  noisy = []; clean = []; samples = 0; chunks = 0; $("chunks").textContent = 0; $("dl").hidden = true;
+  noisy = []; clean = []; samples = fsamples = chunks = audioSec = modelMs = 0; maxMs = 50; nextPlay = 0;
+  $("chunks").textContent = 0; $("dl").hidden = true; $("fil").style.width = 0;
+  $("chart").querySelectorAll("span").forEach(s => s.remove());
+  for (const id of ["speed"]) $(id).textContent = "–";
   actx = new AudioContext({ sampleRate: 48000 });
+  pctx = new AudioContext({ sampleRate: 48000 });
   ws.send(JSON.stringify({ sr: actx.sampleRate }));
   // turn off browser DSP so the model gets the real noise
   stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
@@ -73,9 +147,11 @@ function stop() {
 }
 
 function finish() {
+  setTimeout(() => pctx.close(), 1000);
   $("noisy").src = wavUrl(noisy, actx.sampleRate);
   const url = wavUrl(clean, 48000);
   $("clean").src = url; $("dl").href = url; $("dl").hidden = false;
+  $("fil").style.width = "100%"; $("lag").textContent = "0.00 s";
   $("rec").disabled = false; $("rec").textContent = "Record"; $("rec").classList.remove("on"); $("status").textContent = "done";
 }
 
