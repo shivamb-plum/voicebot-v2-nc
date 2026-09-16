@@ -36,6 +36,7 @@
 </style>
 <h1>DeepFilterNet3 – live noise cancellation</h1>
 <button id="rec" disabled>Connecting…</button>
+<label>mic rate <select id="sr"><option value="8000">8 kHz</option><option value="16000">16 kHz</option><option value="48000" selected>48 kHz</option></select></label>
 <label><input type="checkbox" id="mon"> monitor filtered audio live (headphones)</label>
 <span id="status" style="margin-left:12px;color:var(--muted)"></span>
 
@@ -46,6 +47,7 @@
 
 <div class="tiles">
   <div class="tile">Avg model time / 0.5 s chunk<b id="avg">– ms</b></div>
+  <div class="tile">Audio rate<b id="rate">–</b></div>
   <div class="tile">Last chunk<b id="ms">– ms</b></div>
   <div class="tile">Lag behind live<b id="lag">– s</b></div>
   <div class="tile">Chunks denoised<b id="chunks">0</b></div>
@@ -85,11 +87,11 @@ connect();
 
 function onClean(x) {
   clean.push(x); fsamples += x.length; $("chunks").textContent = ++chunks;
-  $("fdur").textContent = (fsamples / 48000).toFixed(1) + " s";
-  $("fil").style.width = samples ? Math.min(100, 100 * fsamples / (samples * 48000 / actx.sampleRate)) + "%" : 0;
-  $("lag").textContent = Math.max(0, samples / actx.sampleRate - fsamples / 48000).toFixed(2) + " s";
+  $("fdur").textContent = (fsamples / actx.sampleRate).toFixed(1) + " s";
+  $("fil").style.width = samples ? Math.min(100, 100 * fsamples / samples) + "%" : 0;
+  $("lag").textContent = Math.max(0, (samples - fsamples) / actx.sampleRate).toFixed(2) + " s";
   if ($("mon").checked && pctx) {  // live monitor: schedule each clean chunk back-to-back
-    const b = pctx.createBuffer(1, x.length, 48000); b.copyToChannel(x, 0);
+    const b = pctx.createBuffer(1, x.length, actx.sampleRate); b.copyToChannel(x, 0);
     const s = pctx.createBufferSource(); s.buffer = b; s.connect(pctx.destination);
     nextPlay = Math.max(nextPlay, pctx.currentTime + 0.05); s.start(nextPlay); nextPlay += b.duration;
   }
@@ -120,8 +122,11 @@ async function start() {
   $("chunks").textContent = 0; $("dl").hidden = true; $("fil").style.width = 0;
   $("chart").querySelectorAll("span").forEach(s => s.remove());
   for (const id of ["speed"]) $(id).textContent = "–";
-  actx = new AudioContext({ sampleRate: 48000 });
-  pctx = new AudioContext({ sampleRate: 48000 });
+  const sr = +$("sr").value;  // model runs at 48 kHz; the server resamples to/from this rate
+  actx = new AudioContext({ sampleRate: sr });
+  pctx = new AudioContext({ sampleRate: sr });
+  $("rate").textContent = actx.sampleRate / 1000 + " kHz";
+  $("sr").disabled = true;
   ws.send(JSON.stringify({ sr: actx.sampleRate }));
   // turn off browser DSP so the model gets the real noise
   stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
@@ -149,10 +154,10 @@ function stop() {
 function finish() {
   setTimeout(() => pctx.close(), 1000);
   $("noisy").src = wavUrl(noisy, actx.sampleRate);
-  const url = wavUrl(clean, 48000);
+  const url = wavUrl(clean, actx.sampleRate);
   $("clean").src = url; $("dl").href = url; $("dl").hidden = false;
   $("fil").style.width = "100%"; $("lag").textContent = "0.00 s";
-  $("rec").disabled = false; $("rec").textContent = "Record"; $("rec").classList.remove("on"); $("status").textContent = "done";
+  $("rec").disabled = false; $("sr").disabled = false; $("rec").textContent = "Record"; $("rec").classList.remove("on"); $("status").textContent = "done";
 }
 
 $("rec").onclick = () => recording ? stop() : start().catch(e => { $("status").textContent = e.message; });
