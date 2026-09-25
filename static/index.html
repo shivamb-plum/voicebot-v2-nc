@@ -1,75 +1,62 @@
 <!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>DeepFilterNet3 Live</title>
+<title>Denoiser Shootout</title>
 <style>
   :root{--bg:#0f1115;--card:#171a21;--ink:#eee;--muted:#8b93a7;--accent:#5ad8a4;--warn:#f5b342;--line:#2a2f3a}
-  body{font:15px system-ui;background:var(--bg);color:var(--ink);max-width:760px;margin:32px auto;padding:0 16px}
-  h1{font-size:20px;font-weight:600;margin:0 0 16px}
+  body{font:15px system-ui;background:var(--bg);color:var(--ink);max-width:960px;margin:32px auto;padding:0 16px}
+  h1{font-size:20px;font-weight:600;margin:0 0 4px}
+  .lead{color:var(--muted);margin:0 0 16px}
   button{font:inherit;padding:10px 22px;border:0;border-radius:8px;background:#e33;color:#fff;cursor:pointer}
   button.on{background:#444}
   button:disabled{opacity:.5;cursor:default}
-  label{color:var(--muted);margin-left:16px;cursor:pointer}
-  .hero{background:var(--card);border-radius:12px;padding:20px 24px;margin:20px 0}
-  .hero .big{font-size:56px;font-weight:700;line-height:1;color:var(--accent);font-variant-numeric:tabular-nums}
-  .hero .big small{font-size:22px;color:var(--ink);font-weight:500;margin-left:8px}
-  .hero .sub{color:var(--muted);margin-top:8px}
-  .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:16px 0}
-  .tile{background:var(--card);border-radius:10px;padding:12px 14px;color:var(--muted);font-size:13px}
-  .tile b{display:block;color:var(--ink);font-size:22px;font-weight:600;margin-top:2px;font-variant-numeric:tabular-nums}
-  .prog{margin:16px 0 6px;color:var(--muted);font-size:13px;display:flex;justify-content:space-between}
-  .bar{height:8px;background:var(--line);border-radius:4px;overflow:hidden;position:relative}
-  .bar i{position:absolute;left:0;top:0;bottom:0;border-radius:4px;transition:width .1s}
-  .bar .cap{background:#3a4152}
-  .bar .fil{background:var(--accent)}
-  #meter{height:4px;background:var(--line);border-radius:2px;margin:14px 0 0;overflow:hidden}
-  #meter div{height:100%;width:0;background:var(--muted);transition:width .05s}
-  .strip{margin-top:20px}
-  .strip .hdr{display:flex;justify-content:space-between;color:var(--muted);font-size:13px;margin-bottom:6px}
-  #chart{height:90px;display:flex;align-items:flex-end;gap:2px;border-bottom:1px solid var(--line);position:relative;overflow:hidden}
-  #chart span{flex:0 0 5px;background:var(--accent);border-radius:2px 2px 0 0;min-height:2px}
-  #chart span.slow{background:var(--warn)}
-  #budget{position:absolute;left:0;right:0;border-top:1px dashed var(--muted);color:var(--muted);font-size:11px;text-align:right;padding-right:4px}
-  section{margin-top:20px;color:var(--muted)}
-  audio{width:100%;margin-top:6px;display:block}
-  a{color:var(--accent)}
+  label{color:var(--muted);margin-left:14px}
+  select{font:inherit;background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:6px;padding:4px 6px}
+  .top{background:var(--card);border-radius:12px;padding:14px 18px;margin:18px 0;display:flex;gap:24px;align-items:center;flex-wrap:wrap;color:var(--muted);font-size:13px}
+  .top b{display:block;color:var(--ink);font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
+  #meter{flex:1;min-width:120px;height:6px;background:var(--line);border-radius:3px;overflow:hidden}
+  #meter div{height:100%;width:0;background:var(--accent);transition:width .05s}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:12px}
+  .card{background:var(--card);border-radius:12px;padding:14px 16px;position:relative}
+  .card h2{font-size:15px;font-weight:600;margin:0 0 2px;display:flex;justify-content:space-between;align-items:baseline}
+  .card h2 small{color:var(--muted);font-weight:400;font-size:12px}
+  .card .big{font-size:40px;font-weight:700;line-height:1.1;color:var(--accent);font-variant-numeric:tabular-nums}
+  .card .big small{font-size:14px;color:var(--ink);font-weight:500;margin-left:6px}
+  .card .row{display:flex;gap:16px;color:var(--muted);font-size:12px;margin:8px 0 6px}
+  .card .row b{display:block;color:var(--ink);font-size:15px;font-weight:600;font-variant-numeric:tabular-nums}
+  .strip{height:36px;display:flex;align-items:flex-end;gap:1px;border-bottom:1px solid var(--line);overflow:hidden}
+  .strip span{flex:0 0 3px;background:var(--accent);min-height:1px;border-radius:1px 1px 0 0}
+  .strip span.slow{background:var(--warn)}
+  .scale{color:var(--muted);font-size:11px;text-align:right;margin-top:2px}
+  .rank{position:absolute;top:12px;right:14px;font-size:11px;color:var(--bg);background:var(--accent);padding:2px 7px;border-radius:10px;font-weight:600}
+  audio{width:100%;margin-top:8px;display:block;height:36px}
+  a{color:var(--accent);font-size:12px}
+  section{margin:14px 0;color:var(--muted)}
 </style>
-<h1>DeepFilterNet3 – live noise cancellation</h1>
+<h1>Noise-suppression shootout</h1>
+<p class="lead">One mic recording, streamed live through every model in 0.5 s chunks. Cards sort by speed; listen to each result after you stop.</p>
 <button id="rec" disabled>Connecting…</button>
 <label>mic rate <select id="sr"><option value="8000">8 kHz</option><option value="16000">16 kHz</option><option value="48000" selected>48 kHz</option></select></label>
-<label><input type="checkbox" id="mon"> monitor filtered audio live (headphones)</label>
+<label>live monitor (headphones) <select id="mon"><option value="">off</option></select></label>
 <span id="status" style="margin-left:12px;color:var(--muted)"></span>
 
-<div class="hero">
-  <div class="big"><span id="speed">–</span><small>× faster than realtime</small></div>
-  <div class="sub" id="speedsub">Audio seconds denoised per second of model compute. Above 1× means it keeps up live.</div>
+<div class="top">
+  <div>Captured<b id="dur">0.0 s</b></div>
+  <div>Chunks<b id="chunks">0</b></div>
+  <div>All models / chunk<b id="total">– ms</b></div>
+  <div>Budget<b>500 ms</b></div>
+  <div id="meter"><div></div></div>
 </div>
 
-<div class="tiles">
-  <div class="tile">Avg model time / 0.5 s chunk<b id="avg">– ms</b></div>
-  <div class="tile">Audio rate<b id="rate">–</b></div>
-  <div class="tile">Last chunk<b id="ms">– ms</b></div>
-  <div class="tile">Lag behind live<b id="lag">– s</b></div>
-  <div class="tile">Chunks denoised<b id="chunks">0</b></div>
-</div>
-
-<div class="prog"><span>Captured <b id="dur">0.0 s</b></span><span>Filtered <b id="fdur">0.0 s</b></span></div>
-<div class="bar"><i class="cap" style="width:100%"></i><i class="fil" id="fil"></i></div>
-<div id="meter"><div></div></div>
-
-<div class="strip">
-  <div class="hdr"><span>Model time per chunk, as it happens</span><span id="scale"></span></div>
-  <div id="chart"><div id="budget" hidden></div></div>
-</div>
+<div class="grid" id="grid"></div>
 
 <section>Noisy (raw mic)<audio id="noisy" controls></audio></section>
-<section>Filtered (DeepFilterNet3)<audio id="clean" controls></audio> <a id="dl" hidden download="filtered.wav">download filtered.wav</a></section>
 
 <script>
 const $ = id => document.getElementById(id);
-const BUDGET = 500;  // ms of wall-clock available per 0.5 s chunk before we fall behind live
-let ws, actx, pctx, stream, node, noisy = [], clean = [], samples = 0, fsamples = 0, chunks = 0, recording = false;
-let audioSec = 0, modelMs = 0, nextPlay = 0, maxMs = 50;
+const BUDGET = 500;  // wall-clock ms available per 0.5 s chunk before a model falls behind live
+let ws, actx, pctx, stream, node, noisy = [], samples = 0, chunks = 0, recording = false, header = null, nextPlay = 0;
+let M = {};  // model name -> stats + output chunks; cards are created as the server announces models
 
 function connect() {
   ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`);
@@ -77,58 +64,66 @@ function connect() {
   ws.onopen = () => { $("rec").disabled = false; $("rec").textContent = "Record"; $("status").textContent = ""; };
   ws.onclose = () => { $("rec").disabled = true; $("status").textContent = "disconnected, retrying…"; setTimeout(connect, 1000); };
   ws.onmessage = e => {
-    if (e.data instanceof ArrayBuffer) { onClean(new Float32Array(e.data)); return; }
+    if (e.data instanceof ArrayBuffer) { onChunk(header, new Float32Array(e.data)); return; }
     const m = JSON.parse(e.data);
-    if (m.ms !== undefined) onStat(m);
+    if (m.model) header = m;
     if (m.done) finish();
   };
 }
 connect();
 
-function onClean(x) {
-  clean.push(x); fsamples += x.length; $("chunks").textContent = ++chunks;
-  $("fdur").textContent = (fsamples / actx.sampleRate).toFixed(1) + " s";
-  $("fil").style.width = samples ? Math.min(100, 100 * fsamples / samples) + "%" : 0;
-  $("lag").textContent = Math.max(0, (samples - fsamples) / actx.sampleRate).toFixed(2) + " s";
-  if ($("mon").checked && pctx) {  // live monitor: schedule each clean chunk back-to-back
+function card(name, msr) {
+  const el = document.createElement("div"); el.className = "card";
+  el.innerHTML = `<h2>${name}<small>${msr / 1000} kHz model</small></h2>
+    <div class="big"><span class="speed">–</span><small>× realtime</small></div>
+    <div class="row"><div>avg / chunk<b class="avg">–</b></div><div>last<b class="last">–</b></div><div>filtered<b class="fdur">0.0 s</b></div></div>
+    <div class="strip"></div><div class="scale"></div>
+    <audio controls hidden></audio><a hidden download="${name}.wav">download wav</a>`;
+  $("grid").appendChild(el);
+  $("mon").insertAdjacentHTML("beforeend", `<option value="${name}">${name}</option>`);
+  return { el, clean: [], fsamples: 0, n: 0, ms: 0, sec: 0, maxMs: 30 };
+}
+
+function onChunk(h, x) {
+  const m = M[h.model] || (M[h.model] = card(h.model, h.model_sr));
+  m.clean.push(x); m.fsamples += x.length; m.n++; m.ms += h.ms; m.sec += h.sec; m.last = h.ms;
+  const q = s => m.el.querySelector(s);
+  q(".speed").textContent = (m.sec * 1000 / m.ms).toFixed(0);
+  q(".avg").textContent = Math.round(m.ms / m.n) + " ms"; q(".last").textContent = h.ms + " ms";
+  q(".fdur").textContent = (m.fsamples / actx.sampleRate).toFixed(1) + " s";
+  m.maxMs = Math.max(m.maxMs, h.ms * 1.25);
+  const bar = document.createElement("span"); bar.dataset.ms = h.ms; bar.title = `${h.ms} ms`;
+  if (h.ms > BUDGET) bar.classList.add("slow");
+  const strip = q(".strip"); strip.appendChild(bar);
+  while (strip.children.length > 90) strip.firstChild.remove();
+  for (const s of strip.children) s.style.height = Math.min(100, 100 * s.dataset.ms / m.maxMs) + "%";
+  q(".scale").textContent = `0–${Math.round(m.maxMs)} ms per 0.5 s chunk`;
+  if ($("mon").value === h.model && pctx) {  // live monitor: schedule this model's output back-to-back
     const b = pctx.createBuffer(1, x.length, actx.sampleRate); b.copyToChannel(x, 0);
     const s = pctx.createBufferSource(); s.buffer = b; s.connect(pctx.destination);
     nextPlay = Math.max(nextPlay, pctx.currentTime + 0.05); s.start(nextPlay); nextPlay += b.duration;
   }
-}
-
-function onStat(m) {
-  audioSec += m.sec; modelMs += m.ms;
-  $("ms").textContent = m.ms + " ms";
-  $("avg").textContent = Math.round(modelMs / chunks) + " ms";
-  $("speed").textContent = (audioSec * 1000 / modelMs).toFixed(0);
-  $("speedsub").textContent = `${audioSec.toFixed(1)} s of audio denoised in ${(modelMs / 1000).toFixed(2)} s of model time`;
-  // latency strip: one thin bar per chunk, y auto-scales, dashed line marks the realtime budget when in range
-  maxMs = Math.max(maxMs, m.ms * 1.25);
-  const bar = document.createElement("span");
-  bar.style.height = Math.min(100, 100 * m.ms / maxMs) + "%";
-  bar.title = `chunk ${chunks}: ${m.ms} ms for ${(m.sec * 1000).toFixed(0)} ms of audio`;
-  if (m.ms > BUDGET) bar.classList.add("slow");
-  $("chart").appendChild(bar);
-  for (const s of $("chart").querySelectorAll("span")) s.style.height = Math.min(100, 100 * parseFloat(s.title.split(": ")[1]) / maxMs) + "%";
-  $("scale").textContent = `y: 0–${Math.round(maxMs)} ms · realtime budget ${BUDGET} ms`;
-  $("budget").hidden = BUDGET > maxMs;
-  $("budget").style.bottom = 100 * BUDGET / maxMs + "%"; $("budget").textContent = `${BUDGET} ms budget`;
-  while ($("chart").querySelectorAll("span").length > 140) $("chart").querySelector("span").remove();
+  // totals + rank once every model has reported this chunk
+  const all = Object.values(M);
+  if (all.every(v => v.n === m.n)) {
+    chunks = m.n; $("chunks").textContent = chunks;
+    $("total").textContent = all.reduce((a, v) => a + v.last, 0) + " ms";
+    all.sort((a, b) => a.ms / a.n - b.ms / b.n).forEach((v, i) => {
+      $("grid").appendChild(v.el);
+      let r = v.el.querySelector(".rank"); if (!r) { r = document.createElement("span"); r.className = "rank"; v.el.appendChild(r); }
+      r.textContent = i === 0 ? "fastest" : `#${i + 1}`; r.style.background = i === 0 ? "var(--accent)" : "var(--line)"; r.style.color = i === 0 ? "var(--bg)" : "var(--muted)";
+    });
+  }
 }
 
 async function start() {
-  noisy = []; clean = []; samples = fsamples = chunks = audioSec = modelMs = 0; maxMs = 50; nextPlay = 0;
-  $("chunks").textContent = 0; $("dl").hidden = true; $("fil").style.width = 0;
-  $("chart").querySelectorAll("span").forEach(s => s.remove());
-  for (const id of ["speed"]) $(id).textContent = "–";
-  const sr = +$("sr").value;  // model runs at 48 kHz; the server resamples to/from this rate
-  actx = new AudioContext({ sampleRate: sr });
-  pctx = new AudioContext({ sampleRate: sr });
-  $("rate").textContent = actx.sampleRate / 1000 + " kHz";
+  noisy = []; samples = chunks = 0; M = {}; nextPlay = 0; $("grid").innerHTML = ""; $("chunks").textContent = 0; $("total").textContent = "– ms";
+  $("mon").innerHTML = '<option value="">off</option>'; $("noisy").removeAttribute("src");
+  const sr = +$("sr").value;  // every model resamples from/to this rate server-side
+  actx = new AudioContext({ sampleRate: sr }); pctx = new AudioContext({ sampleRate: sr });
   $("sr").disabled = true;
   ws.send(JSON.stringify({ sr: actx.sampleRate }));
-  // turn off browser DSP so the model gets the real noise
+  // turn off browser DSP so the models get the real noise
   stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
   const src = actx.createMediaStreamSource(stream);
   node = actx.createScriptProcessor(4096, 1, 1);  // ponytail: deprecated but zero extra files; AudioWorklet if it glitches
@@ -154,9 +149,10 @@ function stop() {
 function finish() {
   setTimeout(() => pctx.close(), 1000);
   $("noisy").src = wavUrl(noisy, actx.sampleRate);
-  const url = wavUrl(clean, actx.sampleRate);
-  $("clean").src = url; $("dl").href = url; $("dl").hidden = false;
-  $("fil").style.width = "100%"; $("lag").textContent = "0.00 s";
+  for (const m of Object.values(M)) {
+    const url = wavUrl(m.clean, actx.sampleRate), a = m.el.querySelector("audio"), d = m.el.querySelector("a");
+    a.src = url; a.hidden = false; d.href = url; d.hidden = false;
+  }
   $("rec").disabled = false; $("sr").disabled = false; $("rec").textContent = "Record"; $("rec").classList.remove("on"); $("status").textContent = "done";
 }
 

@@ -1,25 +1,21 @@
-"""DeepFilterNet3 realtime demo. Run: uv run uvicorn server:app --reload"""
+"""Multi-model realtime denoise comparison. Run: uv run uvicorn server:app"""
 import asyncio, json, time
-import numpy as np, torch, torchaudio
+import numpy as np
 from fastapi import FastAPI, WebSocket
 from fastapi.responses import FileResponse
-from df.enhance import init_df, enhance
-
-SR = 48000  # DeepFilterNet3 is a 48 kHz model; other client rates are resampled around it
+from models import MODELS
 
 app = FastAPI()
-model, df_state, _ = init_df(log_level="WARNING")
 
 
-def denoise(ctx: np.ndarray, chunk: np.ndarray, sr: int) -> np.ndarray:
-    """ctx is the previous chunk, fed as warm-up context and dropped from the output."""
-    x = torch.from_numpy(np.concatenate([ctx, chunk]))[None]
-    if sr != SR:
-        x = torchaudio.functional.resample(x, sr, SR)
-    y = enhance(model, df_state, x)
-    if sr != SR:
-        y = torchaudio.functional.resample(y, SR, sr)
-    return y[0, len(ctx):len(ctx) + len(chunk)].numpy()
+def run_all(models, chunk):
+    # ponytail: sequential so per-model timings don't contend for CPU; thread pool if the sum ever exceeds the 500 ms budget
+    out = []
+    for m in models:
+        t = time.perf_counter()
+        y = m.process(chunk)
+        out.append((m.name, m.sr, round((time.perf_counter() - t) * 1000), y))
+    return out
 
 
 @app.get("/")
@@ -29,18 +25,16 @@ def index():
 
 @app.websocket("/ws")
 async def ws(ws: WebSocket):
-    """Client sends {"sr": N} then float32 mono PCM at N Hz; server replies with enhanced PCM at N Hz per 0.5 s chunk."""
+    """Client sends {"sr": N} then float32 mono PCM at N Hz. Per 0.5 s chunk and per model the server replies with
+    a JSON header {"model", "model_sr", "ms", "sec"} followed by one binary frame of enhanced float32 PCM at N Hz."""
     await ws.accept()
-    sr = SR
-    buf = ctx = np.zeros(0, np.float32)
+    sr, models = 48000, []
+    buf = np.zeros(0, np.float32)
 
     async def flush(chunk):
-        nonlocal ctx
-        t = time.perf_counter()
-        out = await asyncio.to_thread(denoise, ctx, chunk, sr)
-        ctx = chunk[-(sr // 2):]
-        await ws.send_bytes(out.astype(np.float32).tobytes())
-        await ws.send_text(json.dumps({"ms": round((time.perf_counter() - t) * 1000), "sec": len(chunk) / sr}))
+        for name, msr, ms, y in await asyncio.to_thread(run_all, models, chunk):
+            await ws.send_text(json.dumps({"model": name, "model_sr": msr, "ms": ms, "sec": len(chunk) / sr}))
+            await ws.send_bytes(y.tobytes())
 
     while True:
         msg = await ws.receive()
@@ -53,9 +47,12 @@ async def ws(ws: WebSocket):
                 buf = buf[sr // 2:]
         elif msg.get("text"):
             m = json.loads(msg["text"])
-            sr = int(m.get("sr", sr))
+            if "sr" in m:  # session start: fresh model states for this recording
+                sr = int(m["sr"])
+                models = await asyncio.to_thread(lambda: [M(sr) for M in MODELS])
+                buf = buf[:0]
             if m.get("stop"):
                 if len(buf):
                     await flush(buf)
-                buf = ctx = buf[:0]
+                buf = buf[:0]
                 await ws.send_text(json.dumps({"done": True}))

@@ -2,6 +2,7 @@
 import json, numpy as np
 from fastapi.testclient import TestClient
 from server import app
+from models import MODELS
 
 def main(SR):
     x = (np.sin(np.arange(int(SR * 1.3)) * 0.05) * 0.3 + np.random.randn(int(SR * 1.3)) * 0.1).astype(np.float32)
@@ -10,19 +11,23 @@ def main(SR):
         for i in range(0, len(x), 4096):
             ws.send_bytes(x[i:i + 4096].tobytes())
         ws.send_text(json.dumps({"stop": True}))
-        out, lat = [], []
+        out, ms, hdr = {}, {}, None
         while True:
             m = ws.receive()
-            if m.get("bytes"): out.append(np.frombuffer(m["bytes"], np.float32))
+            if m.get("bytes"):
+                out.setdefault(hdr["model"], []).append(np.frombuffer(m["bytes"], np.float32))
+                ms.setdefault(hdr["model"], []).append(hdr["ms"])
             else:
                 d = json.loads(m["text"])
                 if d.get("done"): break
-                lat.append(d["ms"])
-    y = np.concatenate(out)
-    assert len(y) == len(x), (len(y), len(x))
-    assert len(lat) == 3, lat  # 0.5 + 0.5 + 0.3 s
-    assert np.std(y) < np.std(x), "enhanced should have less energy than white-noise input"
-    print("ok", SR, "Hz", len(y), "samples, latencies ms:", lat)
+                hdr = d
+    assert set(out) == {M.name for M in MODELS}, set(out)
+    for name, chunks in out.items():
+        y = np.concatenate(chunks)
+        assert len(ms[name]) == 3, (name, ms[name])            # 0.5 + 0.5 + 0.3 s
+        assert abs(len(y) - len(x)) < SR * 0.35, (name, len(y), len(x))  # bounded window + resampler delay, tail not flushed
+        assert np.isfinite(y).all() and np.std(y) < np.std(x), name
+    print("ok", SR, "Hz", {k: v for k, v in ms.items()})
 
 if __name__ == "__main__":
     for sr in (48000, 8000):

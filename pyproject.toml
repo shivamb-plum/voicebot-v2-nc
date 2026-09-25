@@ -4,8 +4,11 @@ version = "0.1.0"
 requires-python = ">=3.11,<3.12"
 dependencies = [
     "deepfilternet>=0.5.6",
+    "dpdfnet>=0.6.0",
     "fastapi>=0.141.1",
     "numpy>=1.26.4",
+    "onnxruntime>=1.30.0",
+    "pyrnnoise>=0.4.5",
     "torch<2.9",
     "torchaudio<2.9",
     "uvicorn[standard]>=0.53.0",
