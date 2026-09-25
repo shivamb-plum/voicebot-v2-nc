@@ -20,6 +20,7 @@
   .card{background:var(--card);border-radius:12px;padding:14px 16px;position:relative}
   .card h2{font-size:15px;font-weight:600;margin:0 0 2px;display:flex;justify-content:space-between;align-items:baseline}
   .card h2 small{color:var(--muted);font-weight:400;font-size:12px}
+  .card h2>span{white-space:nowrap}
   .card .big{font-size:40px;font-weight:700;line-height:1.1;color:var(--accent);font-variant-numeric:tabular-nums}
   .card .big small{font-size:14px;color:var(--ink);font-weight:500;margin-left:6px}
   .card .row{display:flex;gap:16px;color:var(--muted);font-size:12px;margin:8px 0 6px}
@@ -76,7 +77,7 @@ connect();
 
 function card(name, msr) {
   const el = document.createElement("div"); el.className = "card";
-  el.innerHTML = `<h2>${name}<span><small>${msr / 1000} kHz model</small><span class="rank"></span></span></h2>
+  el.innerHTML = `<h2>${name}<span><small>${msr / 1000} kHz</small><span class="rank"></span></span></h2>
     <div class="big"><span class="speed">–</span><small>× realtime</small></div>
     <div class="row"><div>avg / chunk<b class="avg">–</b></div><div>last<b class="last">–</b></div><div>filtered<b class="fdur">0.0 s</b></div></div>
     <div class="strip"></div><div class="scale"></div>
