@@ -30,7 +30,7 @@
   .strip span.slow{background:var(--warn)}
   .scale{color:var(--muted);font-size:11px;text-align:right;margin-top:2px}
   .rank{font-size:11px;color:var(--muted);background:var(--line);padding:2px 7px;border-radius:10px;font-weight:600;margin-left:8px}
-  .rank.top{color:var(--bg);background:var(--accent)}
+  .rank.first{color:var(--bg);background:var(--accent)}
   audio{width:100%;margin-top:8px;display:block;height:36px}
   audio[hidden]{display:none}
   a{color:var(--accent);font-size:12px}
@@ -113,7 +113,7 @@ function onChunk(h, x) {
     $("total").textContent = all.reduce((a, v) => a + v.last, 0) + " ms";
     all.sort((a, b) => a.ms / a.n - b.ms / b.n).forEach((v, i) => {
       $("grid").appendChild(v.el);
-      const r = v.el.querySelector(".rank"); r.textContent = i === 0 ? "fastest" : `#${i + 1}`; r.classList.toggle("top", i === 0);
+      const r = v.el.querySelector(".rank"); r.textContent = i === 0 ? "fastest" : `#${i + 1}`; r.classList.toggle("first", i === 0);
     });
   }
 }
