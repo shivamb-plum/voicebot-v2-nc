@@ -28,8 +28,10 @@
   .strip span{flex:0 0 3px;background:var(--accent);min-height:1px;border-radius:1px 1px 0 0}
   .strip span.slow{background:var(--warn)}
   .scale{color:var(--muted);font-size:11px;text-align:right;margin-top:2px}
-  .rank{position:absolute;top:12px;right:14px;font-size:11px;color:var(--bg);background:var(--accent);padding:2px 7px;border-radius:10px;font-weight:600}
+  .rank{font-size:11px;color:var(--muted);background:var(--line);padding:2px 7px;border-radius:10px;font-weight:600;margin-left:8px}
+  .rank.top{color:var(--bg);background:var(--accent)}
   audio{width:100%;margin-top:8px;display:block;height:36px}
+  audio[hidden]{display:none}
   a{color:var(--accent);font-size:12px}
   section{margin:14px 0;color:var(--muted)}
 </style>
@@ -74,7 +76,7 @@ connect();
 
 function card(name, msr) {
   const el = document.createElement("div"); el.className = "card";
-  el.innerHTML = `<h2>${name}<small>${msr / 1000} kHz model</small></h2>
+  el.innerHTML = `<h2>${name}<span><small>${msr / 1000} kHz model</small><span class="rank"></span></span></h2>
     <div class="big"><span class="speed">–</span><small>× realtime</small></div>
     <div class="row"><div>avg / chunk<b class="avg">–</b></div><div>last<b class="last">–</b></div><div>filtered<b class="fdur">0.0 s</b></div></div>
     <div class="strip"></div><div class="scale"></div>
@@ -110,8 +112,7 @@ function onChunk(h, x) {
     $("total").textContent = all.reduce((a, v) => a + v.last, 0) + " ms";
     all.sort((a, b) => a.ms / a.n - b.ms / b.n).forEach((v, i) => {
       $("grid").appendChild(v.el);
-      let r = v.el.querySelector(".rank"); if (!r) { r = document.createElement("span"); r.className = "rank"; v.el.appendChild(r); }
-      r.textContent = i === 0 ? "fastest" : `#${i + 1}`; r.style.background = i === 0 ? "var(--accent)" : "var(--line)"; r.style.color = i === 0 ? "var(--bg)" : "var(--muted)";
+      const r = v.el.querySelector(".rank"); r.textContent = i === 0 ? "fastest" : `#${i + 1}`; r.classList.toggle("top", i === 0);
     });
   }
 }
